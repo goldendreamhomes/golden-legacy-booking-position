@@ -285,8 +285,7 @@
 
 <script>
   /* ════════════════════════════════════════════════════════
-     FIREBASE CONFIG — replace with your real project values
-     (Firebase Console → Project Settings → Your apps → Web app)
+     FIREBASE CONFIG
      ════════════════════════════════════════════════════════ */
   const firebaseConfig = {
     apiKey: "AIzaSyDOfi8f02dqTOVLsrZ-S8dvibD2HonftVA",
@@ -309,6 +308,7 @@
   let currentData = { flats: {} };
   let editingFlat = null;
   let openTooltipFlat = null;
+  let boardListenerStarted = false;
 
   // ── Build the 128-flat layout (matches the quotation generator's mapping) ──
   const FLOORS = 16, UNITS = 8;
@@ -340,7 +340,6 @@
     if (!isConfigured) {
       document.getElementById('setupBanner').classList.add('show');
       setSyncState(false, 'Not configured');
-      // Render with all-available default so the page is still visible/usable for layout checks.
       currentData = { flats: {} };
       renderGrid();
       updateSummary();
@@ -349,17 +348,19 @@
     listenToBoard();
   });
 
-  // ── Firestore real-time listener ──
+  // ── Firestore real-time listener (only ever attached once) ──
   function listenToBoard() {
+    if (boardListenerStarted) return;
+    boardListenerStarted = true;
     const ref = db.collection(BOARD_PATH.collection).doc(BOARD_PATH.doc);
     ref.onSnapshot(
       (snap) => {
         if (!snap.exists) {
-          // First-ever load: seed default data IF we're authenticated (editor just logged in).
           if (isEditor) {
             const seed = {};
             ALL_FLATS.forEach(f => { seed[f.no] = { status: 'available' }; });
-            ref.set({ flats: seed, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            ref.set({ flats: seed, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+              .catch(e => console.error('Seed write failed', e));
           } else {
             currentData = { flats: {} };
             renderGrid();
@@ -394,7 +395,6 @@
     }
   }
 
-  // ── Render grid skeleton (header rows) ──
   function renderGridSkeleton() {
     // built fully in renderGrid(); this just ensures table exists before first data arrives
   }
@@ -488,7 +488,6 @@
     const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
   }
 
-  // close tooltip when clicking elsewhere
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.flat-chip') && !e.target.closest('#ttip')) {
       document.getElementById('ttip').style.display = 'none';
@@ -529,8 +528,6 @@
       isEditor = true;
       closePwModal();
       updateModeUI();
-      // Re-trigger listener logic so it can seed the board if this is the very first run.
-      listenToBoard();
     }).catch((e) => {
       document.getElementById('pwErr').textContent = 'Could not sign in: ' + e.message;
     });
@@ -589,9 +586,16 @@
 
   function saveFlat() {
     if (!editingFlat) return;
-    const status = document.querySelector('#statusRadio input:checked').value;
+    const checked = document.querySelector('#statusRadio input:checked');
     const errEl = document.getElementById('editErr');
     errEl.style.display = 'none';
+
+    if (!checked) {
+      errEl.textContent = 'Please select a status (Available, Provisional, or Confirmed).';
+      errEl.style.display = 'block';
+      return;
+    }
+    const status = checked.value;
 
     let payload = { status };
     if (status === 'confirmed') {
@@ -607,9 +611,14 @@
       payload = { status, bookingDate, customerName, salesPerson };
       if (cpName) payload.cpName = cpName;
     } else if (status === 'provisional') {
-      // Optional customer name carried over if present, but not mandatory.
       const customerName = document.getElementById('fCustomerName').value.trim();
       if (customerName) payload.customerName = customerName;
+    }
+
+    if (!db) {
+      errEl.textContent = 'Save failed: database connection not available. Check your Firebase config.';
+      errEl.style.display = 'block';
+      return;
     }
 
     const ref = db.collection(BOARD_PATH.collection).doc(BOARD_PATH.doc);
@@ -621,6 +630,7 @@
     }).catch((e) => {
       errEl.textContent = 'Save failed: ' + e.message;
       errEl.style.display = 'block';
+      console.error('Save failed', e);
     });
   }
 
@@ -656,7 +666,6 @@
             return;
           } catch (e) { /* user cancelled or unsupported — fall through */ }
         }
-        // Fallback: download the image and open WhatsApp with text only.
         const link = document.createElement('a');
         link.download = 'booking-status.png';
         link.href = canvas.toDataURL('image/png');
