@@ -404,7 +404,19 @@
     return (f && f.status) ? f.status : 'available';
   }
 
-  function renderGrid() {
+  function computeCounts() {
+    let confirmed = 0, provisional = 0;
+    ALL_FLATS.forEach(f => {
+      const st = statusOf(f.no);
+      if (st === 'confirmed') confirmed++;
+      else if (st === 'provisional') provisional++;
+    });
+    return { total: ALL_FLATS.length, confirmed, provisional };
+  }
+
+  // forExport=true presents provisional flats visually as confirmed (since the
+  // shared PNG/WhatsApp view is only ever shown to customers, never the live link).
+  function renderGrid(forExport = false) {
     const table = document.getElementById('flatTable');
     let html = '<thead><tr><th>Floor</th>';
     for (let u=1; u<=UNITS; u++) {
@@ -415,7 +427,8 @@
       html += `<tr><td class="floorlbl">${f}</td>`;
       for (let u=1; u<=UNITS; u++) {
         const no = flatNo(f,u);
-        const st = statusOf(no);
+        let st = statusOf(no);
+        if (forExport && st === 'provisional') st = 'confirmed';
         html += `<td class="cell"><div class="flat-chip ${st}" data-no="${no}" onclick="onChipClick('${no}')">${no}</div></td>`;
       }
       html += '</tr>';
@@ -424,19 +437,49 @@
     table.innerHTML = html;
   }
 
-  function updateSummary() {
-    let confirmed=0, provisional=0;
-    ALL_FLATS.forEach(f => {
-      const st = statusOf(f.no);
-      if (st==='confirmed') confirmed++;
-      else if (st==='provisional') provisional++;
-    });
-    const total = ALL_FLATS.length;
-    const booked = confirmed + provisional;          // plain sum — never shown as "x + y"
-    const available = total - booked;                 // plain difference — never shown as "x - y"
+  // Website (live) view: "Booked" = confirmed only, since provisional holds aren't
+  // final yet, and "Available" = Total − Confirmed (provisional units still count
+  // as available on the live site, since the hold isn't final).
+  // Export view (forExport=true): provisional is visually folded into "Booked"
+  // (the shared PNG/WhatsApp image never distinguishes the two), so "Available"
+  // there = Total − Confirmed − Provisional to stay consistent with what's shown.
+  function updateSummary(forExport = false) {
+    const { total, confirmed, provisional } = computeCounts();
+    const booked = forExport ? (confirmed + provisional) : confirmed;            // plain sum, never "x + y"
+    const available = forExport ? (total - confirmed - provisional) : (total - confirmed); // plain difference, never "x - y"
     document.getElementById('sumTotal').textContent = total;
     document.getElementById('sumBooked').textContent = booked;
     document.getElementById('sumAvail').textContent = available;
+  }
+
+  function renderLegend(forExport = false) {
+    const legend = document.querySelector('.legend');
+    if (!legend) return;
+    legend.innerHTML = forExport
+      ? `<span><span class="swatch sw-avail"></span> Available</span>
+         <span><span class="swatch sw-conf"></span> Booked</span>`
+      : `<span><span class="swatch sw-avail"></span> Available</span>
+         <span><span class="swatch sw-conf"></span> Booked (Confirmed)</span>
+         <span><span class="swatch sw-prov"></span> Booked (Provisional)</span>`;
+  }
+
+  function setHintVisibility(visible) {
+    const hint = document.getElementById('hintTxt');
+    if (hint) hint.style.display = visible ? '' : 'none';
+  }
+
+  function enterExportView() {
+    renderGrid(true);
+    updateSummary(true);
+    renderLegend(true);
+    setHintVisibility(false);
+  }
+
+  function exitExportView() {
+    renderGrid(false);
+    updateSummary(false);
+    renderLegend(false);
+    setHintVisibility(true);
   }
 
   // ── Chip click: editor → edit modal · viewer → tooltip ──
@@ -664,21 +707,30 @@
 
   function downloadPNG() {
     hideFloatingUI();
+    enterExportView();
     html2canvas(document.getElementById('captureArea'), { backgroundColor: '#edf2f7', scale: 2 }).then(canvas => {
+      exitExportView();
       const link = document.createElement('a');
       link.download = `GoldenLegacy_WingB_BookingStatus_${new Date().toISOString().slice(0,10)}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
+    }).catch((e) => {
+      exitExportView();
+      console.error('PNG export failed', e);
     });
   }
 
   function shareWhatsApp() {
     hideFloatingUI();
+    enterExportView();
     html2canvas(document.getElementById('captureArea'), { backgroundColor: '#edf2f7', scale: 2 }).then(canvas => {
+      // Read export-mode numbers (Booked = Confirmed + Provisional) before
+      // restoring the live view, so the WhatsApp text matches the image exactly.
+      const total = document.getElementById('sumTotal').textContent;
+      const booked = document.getElementById('sumBooked').textContent;
+      const available = document.getElementById('sumAvail').textContent;
+      exitExportView();
       canvas.toBlob(async (blob) => {
-        const total = document.getElementById('sumTotal').textContent;
-        const booked = document.getElementById('sumBooked').textContent;
-        const available = document.getElementById('sumAvail').textContent;
         const text = `Golden Legacy — Wing B Booking Status\nTotal: ${total} | Booked: ${booked} | Available: ${available}`;
         const file = new File([blob], 'booking-status.png', { type: 'image/png' });
 
@@ -694,6 +746,9 @@
         link.click();
         window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n\n(Image downloaded — attach it manually in WhatsApp)')}`, '_blank');
       }, 'image/png');
+    }).catch((e) => {
+      exitExportView();
+      console.error('WhatsApp share failed', e);
     });
   }
 </script>
