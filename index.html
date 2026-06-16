@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Golden Legacy – Booking Status · Wing B</title>
+
+<!-- Firebase (compat SDK) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<!-- html2canvas for PNG export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #edf2f7;
+    min-height: 100vh;
+    padding: 24px 16px 56px;
+    color: #2d3748;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ── Top bar ── */
+  .topbar {
+    background: white; border-radius: 14px; box-shadow: 0 6px 24px rgba(26,60,94,0.1);
+    padding: 18px 22px; display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  }
+  .topbar-left h1 { font-size: 1.3rem; font-weight: 800; color: #1a3c5e; display: flex; align-items: center; gap: 9px; }
+  .topbar-left .sub { font-size: 0.78rem; color: #718096; margin-top: 2px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sync-pill {
+    font-size: 0.7rem; font-weight: 700; color: #2f855a; background: #f0fff4;
+    border: 1px solid #9ae6b4; border-radius: 20px; padding: 5px 11px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sync-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: #38a169; box-shadow: 0 0 0 0 rgba(56,161,105,0.6); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(56,161,105,0.5); } 70% { box-shadow: 0 0 0 6px rgba(56,161,105,0); } 100% { box-shadow: 0 0 0 0 rgba(56,161,105,0); } }
+  .sync-pill.offline { color: #c05621; background: #fffaf0; border-color: #fbd38d; }
+  .sync-pill.offline .dot { background: #dd6b20; animation: none; }
+
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 16px; font-size: 0.82rem; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-mode { background: #edf2f7; color: #4a5568; }
+  .btn-mode:hover { background: #e2e8f0; }
+  .btn-editor { background: #1a3c5e; color: white; }
+  .btn-editor:hover { background: #122c47; }
+  .btn-exit { background: #fff5f5; color: #e53e3e; border: 1.5px solid #fed7d7; }
+  .btn-exit:hover { background: #fed7d7; }
+
+  /* ── Summary cards ── */
+  .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .scard { background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(26,60,94,0.08); padding: 16px 18px; }
+  .scard .lbl { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #a0aec0; margin-bottom: 6px; }
+  .scard .num { font-size: 1.8rem; font-weight: 900; color: #1a3c5e; }
+  .scard.booked .num { color: #c8922a; }
+  .scard.avail .num { color: #2f855a; }
+
+  /* ── Action bar ── */
+  .actionbar { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .btn-share { background: #25D366; color: white; }
+  .btn-share:hover { background: #1ebc59; }
+  .btn-png { background: white; color: #1a3c5e; border: 1.5px solid #cbd5e0; }
+  .btn-png:hover { border-color: #1a3c5e; }
+
+  /* ── Capture area (this is what gets PNG'd / shared) ── */
+  #captureArea { background: transparent; }
+
+  /* ── Grid card ── */
+  .grid-card { background: white; border-radius: 14px; box-shadow: 0 6px 24px rgba(26,60,94,0.1); overflow: hidden; margin-bottom: 16px; }
+  .grid-card-hdr { background: #1a3c5e; padding: 14px 20px; }
+  .grid-card-hdr h2 { font-size: 0.85rem; font-weight: 800; color: white; text-transform: uppercase; letter-spacing: 1.5px; }
+  .accent-bar { height: 4px; background: linear-gradient(90deg, #c8922a, #e8b84b, #c8922a); }
+
+  .grid-scroll { overflow-x: auto; padding: 14px; }
+  table.flatgrid { border-collapse: collapse; width: 100%; min-width: 720px; }
+  table.flatgrid th { font-size: 0.68rem; font-weight: 800; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px; text-align: center; }
+  table.flatgrid th.bhk { font-size: 0.62rem; color: #a0aec0; font-weight: 700; }
+  table.flatgrid td.floorlbl { font-size: 0.8rem; font-weight: 800; color: #4a5568; text-align: center; width: 46px; }
+  table.flatgrid td.cell { padding: 4px; text-align: center; }
+  .flat-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 100%; min-width: 64px; padding: 8px 4px; border-radius: 8px;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer; user-select: none;
+    transition: transform 0.1s; border: 1.5px solid transparent;
+  }
+  .flat-chip:hover { transform: scale(1.04); }
+  .flat-chip.available { background: #f0fff4; color: #276749; border-color: #c6f6d5; }
+  .flat-chip.confirmed { background: #1a3c5e; color: white; }
+  .flat-chip.provisional { background: #bee3f8; color: #1a3c5e; }
+  .flat-chip.editable { cursor: pointer; }
+
+  /* ── Legend ── */
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; padding: 4px 20px 16px; font-size: 0.74rem; color: #718096; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 13px; height: 13px; border-radius: 4px; display: inline-block; }
+  .sw-avail { background: #f0fff4; border: 1.5px solid #c6f6d5; }
+  .sw-conf { background: #1a3c5e; }
+  .sw-prov { background: #bee3f8; }
+  .hint { font-size: 0.72rem; color: #a0aec0; padding: 0 20px 14px; }
+
+  /* ── Tooltip ── */
+  #ttip {
+    position: absolute; display: none; z-index: 90;
+    background: #1a202c; color: white; border-radius: 9px; padding: 11px 14px;
+    font-size: 0.78rem; line-height: 1.6; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    max-width: 240px;
+  }
+  #ttip b { color: #fbd38d; }
+  #ttip .row { display: flex; gap: 6px; }
+  #ttip .row .k { color: #a0aec0; min-width: 64px; }
+
+  /* ── Modal overlay ── */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(26,32,44,0.55); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: white; border-radius: 16px; max-width: 420px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+  }
+  .modal-hdr { background: #1a3c5e; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-hdr h3 { color: white; font-size: 1rem; font-weight: 800; }
+  .modal-hdr .x { color: rgba(255,255,255,0.7); cursor: pointer; font-size: 1.2rem; line-height: 1; }
+  .modal-body { padding: 20px 22px; }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .field label { font-size: 0.7rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.4px; }
+  .field input, .field select {
+    padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;
+    font-family: inherit; color: #2d3748; width: 100%;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: #1a3c5e; box-shadow: 0 0 0 3px rgba(26,60,94,0.1); }
+  .field .req { color: #e53e3e; }
+  .field .err { font-size: 0.7rem; color: #e53e3e; display: none; }
+  .modal-actions { display: flex; gap: 10px; padding: 0 22px 20px; }
+  .modal-actions .btn { flex: 1; justify-content: center; padding: 11px; }
+  .btn-save { background: #1a3c5e; color: white; }
+  .btn-save:hover { background: #122c47; }
+  .btn-cancel { background: #f7fafc; color: #718096; border: 1.5px solid #e2e8f0; }
+  .modal-err { font-size: 0.78rem; color: #e53e3e; padding: 0 22px 10px; display: none; }
+
+  .status-radio { display: flex; gap: 8px; margin-bottom: 16px; }
+  .status-radio label {
+    flex: 1; text-align: center; padding: 9px 6px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+    font-size: 0.76rem; font-weight: 700; cursor: pointer; color: #718096;
+  }
+  .status-radio input { display: none; }
+  .status-radio input:checked + span { color: inherit; }
+  .status-radio label.r-avail.active { background: #f0fff4; border-color: #9ae6b4; color: #276749; }
+  .status-radio label.r-conf.active { background: #1a3c5e; border-color: #1a3c5e; color: white; }
+  .status-radio label.r-prov.active { background: #bee3f8; border-color: #90cdf4; color: #1a3c5e; }
+
+  .conf-fields { display: none; }
+  .conf-fields.show { display: block; }
+
+  .pw-modal .modal-body { padding-top: 22px; }
+  .conn-banner {
+    background: #fffaf0; border: 1.5px solid #fbd38d; border-radius: 10px; padding: 12px 16px;
+    font-size: 0.82rem; color: #744210; margin-bottom: 16px; display: none;
+  }
+  .conn-banner.show { display: block; }
+
+  @media (max-width: 560px) {
+    .summary { grid-template-columns: 1fr; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>🏢 Golden Legacy — Booking Status</h1>
+      <div class="sub">Wing B · Floors 1–16 · 128 Units</div>
+    </div>
+    <div class="topbar-right">
+      <span class="sync-pill" id="syncPill"><span class="dot"></span><span id="syncTxt">Connecting…</span></span>
+      <button class="btn btn-mode" id="modeBtn" onclick="onModeBtnClick()">🔒 Login as Editor</button>
+    </div>
+  </div>
+
+  <div class="conn-banner" id="setupBanner">
+    ⚠️ Firebase is not configured yet. Replace the placeholder values in <code>firebaseConfig</code> near the top of the script with your real project keys for this page to work.
+  </div>
+
+  <div id="captureArea">
+    <div class="summary">
+      <div class="scard total"><div class="lbl">Total Units</div><div class="num" id="sumTotal">—</div></div>
+      <div class="scard booked"><div class="lbl">Booked</div><div class="num" id="sumBooked">—</div></div>
+      <div class="scard avail"><div class="lbl">Available</div><div class="num" id="sumAvail">—</div></div>
+    </div>
+
+    <div class="grid-card">
+      <div class="grid-card-hdr"><h2>Wing B — Flat-wise Status</h2></div>
+      <div class="accent-bar"></div>
+      <div class="grid-scroll">
+        <table class="flatgrid" id="flatTable"></table>
+      </div>
+      <div class="legend">
+        <span><span class="swatch sw-avail"></span> Available</span>
+        <span><span class="swatch sw-conf"></span> Booked (Confirmed)</span>
+        <span><span class="swatch sw-prov"></span> Booked (Provisional)</span>
+      </div>
+      <div class="hint" id="hintTxt">Tap a flat to view booking details. Login as editor to make changes.</div>
+    </div>
+  </div>
+
+  <div class="actionbar">
+    <button class="btn btn-png" onclick="downloadPNG()">⬇ Download PNG</button>
+    <button class="btn btn-share" onclick="shareWhatsApp()">📤 Share via WhatsApp</button>
+  </div>
+
+  <div style="font-size:0.7rem;color:#a0aec0;text-align:center;margin-top:10px;">
+    Last saved: <span id="lastSaved">—</span>
+  </div>
+
+</div>
+
+<!-- Floating tooltip -->
+<div id="ttip"></div>
+
+<!-- Password modal -->
+<div class="overlay" id="pwOverlay">
+  <div class="modal pw-modal">
+    <div class="modal-hdr"><h3>Editor Login</h3><span class="x" onclick="closePwModal()">&times;</span></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Editor Password</label>
+        <input type="password" id="pwInput" placeholder="Enter shared editor password" onkeydown="if(event.key==='Enter') submitPassword()">
+        <span class="err" id="pwErr" style="display:block;color:#e53e3e;font-size:0.78rem;"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closePwModal()">Cancel</button>
+      <button class="btn btn-save" onclick="submitPassword()">Unlock Editor Mode</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit flat modal -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <div class="modal-hdr"><h3 id="editFlatTitle">Flat 101</h3><span class="x" onclick="closeEditModal()">&times;</span></div>
+    <div class="modal-body">
+      <div class="status-radio" id="statusRadio">
+        <label class="r-avail" id="rAvail"><input type="radio" name="st" value="available"><span>Available</span></label>
+        <label class="r-prov" id="rProv"><input type="radio" name="st" value="provisional"><span>Provisional</span></label>
+        <label class="r-conf" id="rConf"><input type="radio" name="st" value="confirmed"><span>Confirmed</span></label>
+      </div>
+
+      <div class="conf-fields" id="confFields">
+        <div class="field">
+          <label>Date of Booking <span class="req">*</span></label>
+          <input type="date" id="fBookingDate">
+        </div>
+        <div class="field">
+          <label>Customer Name <span class="req">*</span></label>
+          <input type="text" id="fCustomerName" placeholder="Full name">
+        </div>
+        <div class="field">
+          <label>Sales Person <span class="req">*</span></label>
+          <input type="text" id="fSalesPerson" placeholder="Sales person name">
+        </div>
+        <div class="field">
+          <label>CP Name (optional)</label>
+          <input type="text" id="fCpName" placeholder="Channel Partner name (or 'Direct')">
+        </div>
+      </div>
+    </div>
+    <div class="modal-err" id="editErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-save" onclick="saveFlat()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ════════════════════════════════════════════════════════
+     FIREBASE CONFIG — replace with your real project values
+     (Firebase Console → Project Settings → Your apps → Web app)
+     ════════════════════════════════════════════════════════ */
+  const firebaseConfig = {
+    apiKey: "AIzaSyDOfi8f02dqTOVLsrZ-S8dvibD2HonftVA",
+    authDomain: "golden-legacy-booking.firebaseapp.com",
+    projectId: "golden-legacy-booking",
+    storageBucket: "golden-legacy-booking.firebasestorage.app",
+    messagingSenderId: "314777966271",
+    appId: "1:314777966271:web:57ecc2f0160e41b9cbd80a"
+  };
+
+  // Shared password sales staff enter to unlock Editor Mode.
+  // This is a soft deterrent only (page is public) — change it any time by editing this line.
+  const EDITOR_PASSWORD = "GoldenB2026";
+
+  const BOARD_PATH = { collection: 'booking_boards', doc: 'wingB' };
+
+  let isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
+  let db = null, auth = null;
+  let isEditor = false;
+  let currentData = { flats: {} };
+  let editingFlat = null;
+  let openTooltipFlat = null;
+
+  // ── Build the 128-flat layout (matches the quotation generator's mapping) ──
+  const FLOORS = 16, UNITS = 8;
+  function flatNo(floor, unit) { return `${floor}${String(unit).padStart(2,'0')}`; }
+  function bhkType(unit) {
+    return (unit===1||unit===4||unit===5||unit===8) ? '3BHK' : '2BHK';
+  }
+  const ALL_FLATS = [];
+  for (let f=1; f<=FLOORS; f++) {
+    for (let u=1; u<=UNITS; u++) {
+      ALL_FLATS.push({ floor: f, unit: u, no: flatNo(f,u), type: bhkType(u) });
+    }
+  }
+
+  // ── Init Firebase ──
+  if (isConfigured) {
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      auth = firebase.auth();
+    } catch (e) {
+      isConfigured = false;
+      console.error('Firebase init failed', e);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    renderGridSkeleton();
+    if (!isConfigured) {
+      document.getElementById('setupBanner').classList.add('show');
+      setSyncState(false, 'Not configured');
+      // Render with all-available default so the page is still visible/usable for layout checks.
+      currentData = { flats: {} };
+      renderGrid();
+      updateSummary();
+      return;
+    }
+    listenToBoard();
+  });
+
+  // ── Firestore real-time listener ──
+  function listenToBoard() {
+    const ref = db.collection(BOARD_PATH.collection).doc(BOARD_PATH.doc);
+    ref.onSnapshot(
+      (snap) => {
+        if (!snap.exists) {
+          // First-ever load: seed default data IF we're authenticated (editor just logged in).
+          if (isEditor) {
+            const seed = {};
+            ALL_FLATS.forEach(f => { seed[f.no] = { status: 'available' }; });
+            ref.set({ flats: seed, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          } else {
+            currentData = { flats: {} };
+            renderGrid();
+            updateSummary();
+          }
+          setSyncState(true);
+          return;
+        }
+        currentData = snap.data() || { flats: {} };
+        renderGrid();
+        updateSummary();
+        setSyncState(true);
+        const ts = currentData.updatedAt && currentData.updatedAt.toDate ? currentData.updatedAt.toDate() : null;
+        document.getElementById('lastSaved').textContent = ts ? ts.toLocaleString('en-IN') : '—';
+      },
+      (err) => {
+        console.error('Firestore listen error', err);
+        setSyncState(false, 'Connection error');
+      }
+    );
+  }
+
+  function setSyncState(ok, label) {
+    const pill = document.getElementById('syncPill');
+    const txt = document.getElementById('syncTxt');
+    if (ok) {
+      pill.classList.remove('offline');
+      txt.textContent = 'Live · Synced ' + new Date().toLocaleTimeString('en-IN');
+    } else {
+      pill.classList.add('offline');
+      txt.textContent = label || 'Offline';
+    }
+  }
+
+  // ── Render grid skeleton (header rows) ──
+  function renderGridSkeleton() {
+    // built fully in renderGrid(); this just ensures table exists before first data arrives
+  }
+
+  function statusOf(no) {
+    const f = currentData.flats && currentData.flats[no];
+    return (f && f.status) ? f.status : 'available';
+  }
+
+  function renderGrid() {
+    const table = document.getElementById('flatTable');
+    let html = '<thead><tr><th>Floor</th>';
+    for (let u=1; u<=UNITS; u++) {
+      html += `<th class="bhk">${bhkType(u)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (let f=1; f<=FLOORS; f++) {
+      html += `<tr><td class="floorlbl">${f}</td>`;
+      for (let u=1; u<=UNITS; u++) {
+        const no = flatNo(f,u);
+        const st = statusOf(no);
+        html += `<td class="cell"><div class="flat-chip ${st}" data-no="${no}" onclick="onChipClick('${no}')">${no}</div></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+
+  function updateSummary() {
+    let confirmed=0, provisional=0;
+    ALL_FLATS.forEach(f => {
+      const st = statusOf(f.no);
+      if (st==='confirmed') confirmed++;
+      else if (st==='provisional') provisional++;
+    });
+    const total = ALL_FLATS.length;
+    const booked = confirmed + provisional;          // plain sum — never shown as "x + y"
+    const available = total - booked;                 // plain difference — never shown as "x - y"
+    document.getElementById('sumTotal').textContent = total;
+    document.getElementById('sumBooked').textContent = booked;
+    document.getElementById('sumAvail').textContent = available;
+  }
+
+  // ── Chip click: editor → edit modal · viewer → tooltip ──
+  function onChipClick(no) {
+    if (isEditor) {
+      openEditModal(no);
+    } else {
+      toggleTooltip(no);
+    }
+  }
+
+  function toggleTooltip(no) {
+    const ttip = document.getElementById('ttip');
+    if (openTooltipFlat === no) {
+      ttip.style.display = 'none';
+      openTooltipFlat = null;
+      return;
+    }
+    const st = statusOf(no);
+    const data = (currentData.flats && currentData.flats[no]) || {};
+    const chip = document.querySelector(`.flat-chip[data-no="${no}"]`);
+    const rect = chip.getBoundingClientRect();
+
+    let body = '';
+    if (st === 'available') {
+      body = `<div>Flat <b>${no}</b> is currently <b>Available</b>.</div>`;
+    } else if (st === 'confirmed') {
+      body = `
+        <div style="margin-bottom:6px;"><b>Flat ${no} — Booked (Confirmed)</b></div>
+        <div class="row"><span class="k">Date</span><span>${data.bookingDate || '—'}</span></div>
+        <div class="row"><span class="k">Customer</span><span>${esc(data.customerName) || '—'}</span></div>
+        <div class="row"><span class="k">Sales Person</span><span>${esc(data.salesPerson) || '—'}</span></div>
+        <div class="row"><span class="k">CP Name</span><span>${esc(data.cpName) || '—'}</span></div>
+      `;
+    } else if (st === 'provisional') {
+      body = `<div><b>Flat ${no} — Booked (Provisional)</b></div><div style="margin-top:4px;color:#cbd5e0;">Tentative hold, not yet confirmed.</div>`;
+    }
+    ttip.innerHTML = body;
+    ttip.style.display = 'block';
+    ttip.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    let left = rect.left + window.scrollX;
+    if (left + 250 > window.innerWidth) left = window.innerWidth - 260;
+    ttip.style.left = Math.max(8,left) + 'px';
+    openTooltipFlat = no;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  // close tooltip when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.flat-chip') && !e.target.closest('#ttip')) {
+      document.getElementById('ttip').style.display = 'none';
+      openTooltipFlat = null;
+    }
+  });
+
+  // ── Editor mode toggle ──
+  function onModeBtnClick() {
+    if (isEditor) {
+      exitEditorMode();
+    } else {
+      openPwModal();
+    }
+  }
+
+  function openPwModal() {
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwErr').textContent = '';
+    document.getElementById('pwOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('pwInput').focus(), 50);
+  }
+  function closePwModal() {
+    document.getElementById('pwOverlay').classList.remove('show');
+  }
+
+  function submitPassword() {
+    const val = document.getElementById('pwInput').value;
+    if (val !== EDITOR_PASSWORD) {
+      document.getElementById('pwErr').textContent = 'Incorrect password.';
+      return;
+    }
+    if (!isConfigured) {
+      document.getElementById('pwErr').textContent = 'Firebase is not configured yet — editing is disabled.';
+      return;
+    }
+    auth.signInAnonymously().then(() => {
+      isEditor = true;
+      closePwModal();
+      updateModeUI();
+      // Re-trigger listener logic so it can seed the board if this is the very first run.
+      listenToBoard();
+    }).catch((e) => {
+      document.getElementById('pwErr').textContent = 'Could not sign in: ' + e.message;
+    });
+  }
+
+  function exitEditorMode() {
+    isEditor = false;
+    if (auth) auth.signOut();
+    updateModeUI();
+  }
+
+  function updateModeUI() {
+    const btn = document.getElementById('modeBtn');
+    const hint = document.getElementById('hintTxt');
+    if (isEditor) {
+      btn.textContent = '✓ Exit Editor Mode';
+      btn.classList.remove('btn-mode'); btn.classList.add('btn-exit');
+      hint.textContent = 'Editor Mode: tap any flat to update its status.';
+    } else {
+      btn.textContent = '🔒 Login as Editor';
+      btn.classList.add('btn-mode'); btn.classList.remove('btn-exit');
+      hint.textContent = 'Tap a flat to view booking details. Login as editor to make changes.';
+    }
+    renderGrid();
+  }
+
+  // ── Edit modal ──
+  function openEditModal(no) {
+    editingFlat = no;
+    const data = (currentData.flats && currentData.flats[no]) || { status: 'available' };
+    document.getElementById('editFlatTitle').textContent = `Flat ${no}`;
+    document.getElementById('editErr').style.display = 'none';
+    setStatusRadio(data.status || 'available');
+    document.getElementById('fBookingDate').value = data.bookingDate || '';
+    document.getElementById('fCustomerName').value = data.customerName || '';
+    document.getElementById('fSalesPerson').value = data.salesPerson || '';
+    document.getElementById('fCpName').value = data.cpName || '';
+    document.getElementById('editOverlay').classList.add('show');
+  }
+  function closeEditModal() {
+    document.getElementById('editOverlay').classList.remove('show');
+    editingFlat = null;
+  }
+
+  function setStatusRadio(status) {
+    ['rAvail','rProv','rConf'].forEach(id => document.getElementById(id).classList.remove('active'));
+    document.querySelectorAll('#statusRadio input').forEach(r => r.checked = (r.value === status));
+    if (status==='available') document.getElementById('rAvail').classList.add('active');
+    if (status==='provisional') document.getElementById('rProv').classList.add('active');
+    if (status==='confirmed') document.getElementById('rConf').classList.add('active');
+    document.getElementById('confFields').classList.toggle('show', status==='confirmed');
+  }
+  document.querySelectorAll('#statusRadio input').forEach(r => {
+    r.addEventListener('change', () => setStatusRadio(r.value));
+  });
+
+  function saveFlat() {
+    if (!editingFlat) return;
+    const status = document.querySelector('#statusRadio input:checked').value;
+    const errEl = document.getElementById('editErr');
+    errEl.style.display = 'none';
+
+    let payload = { status };
+    if (status === 'confirmed') {
+      const bookingDate = document.getElementById('fBookingDate').value.trim();
+      const customerName = document.getElementById('fCustomerName').value.trim();
+      const salesPerson = document.getElementById('fSalesPerson').value.trim();
+      const cpName = document.getElementById('fCpName').value.trim();
+      if (!bookingDate || !customerName || !salesPerson) {
+        errEl.textContent = 'Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.';
+        errEl.style.display = 'block';
+        return;
+      }
+      payload = { status, bookingDate, customerName, salesPerson };
+      if (cpName) payload.cpName = cpName;
+    } else if (status === 'provisional') {
+      // Optional customer name carried over if present, but not mandatory.
+      const customerName = document.getElementById('fCustomerName').value.trim();
+      if (customerName) payload.customerName = customerName;
+    }
+
+    const ref = db.collection(BOARD_PATH.collection).doc(BOARD_PATH.doc);
+    ref.set({
+      [`flats.${editingFlat}`]: payload,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).then(() => {
+      closeEditModal();
+    }).catch((e) => {
+      errEl.textContent = 'Save failed: ' + e.message;
+      errEl.style.display = 'block';
+    });
+  }
+
+  // ── PNG download / WhatsApp share ──
+  function hideFloatingUI() {
+    document.getElementById('ttip').style.display = 'none';
+    openTooltipFlat = null;
+  }
+
+  function downloadPNG() {
+    hideFloatingUI();
+    html2canvas(document.getElementById('captureArea'), { backgroundColor: '#edf2f7', scale: 2 }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `GoldenLegacy_WingB_BookingStatus_${new Date().toISOString().slice(0,10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  }
+
+  function shareWhatsApp() {
+    hideFloatingUI();
+    html2canvas(document.getElementById('captureArea'), { backgroundColor: '#edf2f7', scale: 2 }).then(canvas => {
+      canvas.toBlob(async (blob) => {
+        const total = document.getElementById('sumTotal').textContent;
+        const booked = document.getElementById('sumBooked').textContent;
+        const available = document.getElementById('sumAvail').textContent;
+        const text = `Golden Legacy — Wing B Booking Status\nTotal: ${total} | Booked: ${booked} | Available: ${available}`;
+        const file = new File([blob], 'booking-status.png', { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Golden Legacy Booking Status', text });
+            return;
+          } catch (e) { /* user cancelled or unsupported — fall through */ }
+        }
+        // Fallback: download the image and open WhatsApp with text only.
+        const link = document.createElement('a');
+        link.download = 'booking-status.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n\n(Image downloaded — attach it manually in WhatsApp)')}`, '_blank');
+      }, 'image/png');
+    });
+  }
+</script>
+
+</body>
+</html>
