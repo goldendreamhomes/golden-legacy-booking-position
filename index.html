@@ -530,6 +530,7 @@
       updateModeUI();
     }).catch((e) => {
       document.getElementById('pwErr').textContent = 'Could not sign in: ' + e.message;
+      alert('Editor sign-in FAILED: ' + e.message + '\n\nCode: ' + (e.code || 'unknown'));
     });
   }
 
@@ -585,7 +586,7 @@
   });
 
   function saveFlat() {
-    if (!editingFlat) return;
+    if (!editingFlat) { alert('No flat selected — please close this and click a flat again.'); return; }
     const checked = document.querySelector('#statusRadio input:checked');
     const errEl = document.getElementById('editErr');
     errEl.style.display = 'none';
@@ -593,6 +594,7 @@
     if (!checked) {
       errEl.textContent = 'Please select a status (Available, Provisional, or Confirmed).';
       errEl.style.display = 'block';
+      alert('Please select a status (Available, Provisional, or Confirmed) before saving.');
       return;
     }
     const status = checked.value;
@@ -606,6 +608,7 @@
       if (!bookingDate || !customerName || !salesPerson) {
         errEl.textContent = 'Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
+        alert('Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.');
         return;
       }
       payload = { status, bookingDate, customerName, salesPerson };
@@ -615,21 +618,40 @@
       if (customerName) payload.customerName = customerName;
     }
 
+    if (!isEditor || !auth || !auth.currentUser) {
+      errEl.textContent = 'You are not signed in as editor. Please log out and log back in as editor.';
+      errEl.style.display = 'block';
+      alert('Not signed in as editor — please click "Exit Editor Mode" then "Login as Editor" again.');
+      return;
+    }
     if (!db) {
       errEl.textContent = 'Save failed: database connection not available. Check your Firebase config.';
       errEl.style.display = 'block';
+      alert('Save failed: database connection not available.');
       return;
     }
 
+    const saveBtn = document.querySelector('#editOverlay .btn-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
     const ref = db.collection(BOARD_PATH.collection).doc(BOARD_PATH.doc);
+    const flatsUpdate = {};
+    flatsUpdate[editingFlat] = payload;
     ref.set({
-      [`flats.${editingFlat}`]: payload,
+      flats: flatsUpdate,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).then(() => {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+      alert(`Flat ${editingFlat} saved successfully as "${status}".`);
       closeEditModal();
     }).catch((e) => {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
       errEl.textContent = 'Save failed: ' + e.message;
       errEl.style.display = 'block';
+      alert('Save FAILED: ' + e.message + '\n\nCode: ' + (e.code || 'unknown'));
       console.error('Save failed', e);
     });
   }
