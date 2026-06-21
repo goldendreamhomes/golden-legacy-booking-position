@@ -299,7 +299,7 @@
           </div>
         </div>
         <div class="field">
-          <label>Lead Source (optional)</label>
+          <label>Lead Source <span class="req">*</span></label>
           <select id="fLeadSource">
             <option value="">— Select —</option>
           </select>
@@ -958,14 +958,13 @@
       const salesPerson = getSelectedSalesPersons();
       const leadSource = document.getElementById('fLeadSource').value.trim();
       const cpName = document.getElementById('fCpName').value.trim();
-      if (!bookingDate || !customerName || salesPerson.length === 0) {
-        errEl.textContent = 'Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.';
+      if (!bookingDate || !customerName || salesPerson.length === 0 || !leadSource) {
+        errEl.textContent = 'Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
-        alert('Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.');
+        alert('Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.');
         return;
       }
-      payload = { status, bookingDate, customerName, salesPerson };
-      if (leadSource) payload.leadSource = leadSource;
+      payload = { status, bookingDate, customerName, salesPerson, leadSource };
       if (cpName) payload.cpName = cpName;
     } else if (status === 'provisional') {
       const customerName = document.getElementById('fCustomerName').value.trim();
