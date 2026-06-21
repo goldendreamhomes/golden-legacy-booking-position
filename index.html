@@ -158,6 +158,30 @@
   .conf-fields { display: none; }
   .conf-fields.show { display: block; }
 
+  .multiselect { position: relative; }
+  .multiselect-display {
+    padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem;
+    font-family: inherit; color: #2d3748; width: 100%; min-height: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; background: white;
+  }
+  .multiselect-display .ms-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .multiselect-display .ms-placeholder { color: #a0aec0; }
+  .multiselect-display .ms-arrow { color: #a0aec0; font-size: 0.7rem; flex-shrink: 0; transition: transform 0.15s; }
+  .multiselect.open .multiselect-display { border-color: #1a3c5e; box-shadow: 0 0 0 3px rgba(26,60,94,0.1); }
+  .multiselect.open .ms-arrow { transform: rotate(180deg); }
+  .multiselect-panel {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+    background: white; border: 1.5px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    max-height: 220px; overflow-y: auto; padding: 6px;
+  }
+  .multiselect.open .multiselect-panel { display: block; }
+  .multiselect-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px;
+    font-size: 0.85rem; color: #2d3748; cursor: pointer;
+  }
+  .multiselect-item:hover { background: #f7fafc; }
+  .multiselect-item input { width: 16px; height: 16px; flex-shrink: 0; accent-color: #1a3c5e; }
+
   .pw-modal .modal-body { padding-top: 22px; }
   .conn-banner {
     background: #fffaf0; border: 1.5px solid #fbd38d; border-radius: 10px; padding: 12px 16px;
@@ -266,7 +290,19 @@
         </div>
         <div class="field">
           <label>Sales Person <span class="req">*</span></label>
-          <input type="text" id="fSalesPerson" placeholder="Sales person name">
+          <div class="multiselect" id="msSalesPerson">
+            <div class="multiselect-display" id="msSalesPersonDisplay" onclick="toggleSalesPersonPanel(event)">
+              <span class="ms-text" id="msSalesPersonText"><span class="ms-placeholder">Select sales person(s)</span></span>
+              <span class="ms-arrow">&#9662;</span>
+            </div>
+            <div class="multiselect-panel" id="msSalesPersonPanel"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Lead Source (optional)</label>
+          <select id="fLeadSource">
+            <option value="">— Select —</option>
+          </select>
         </div>
         <div class="field">
           <label>CP Name (optional)</label>
@@ -300,6 +336,46 @@
   const EDITOR_PASSWORD = "GoldenB2026";
 
   const BOARD_PATH = { collection: 'booking_boards', doc: 'wingB' };
+
+  // ── Sales Person list (Confirmed-booking field, multiple can be selected) ──
+  // Add, remove, or rename names here any time — this is the single source of truth
+  // for the dropdown options. Kept in alphabetical order.
+  const SALES_PERSONS = [
+    "Amardip Gatade",
+    "Karishma Borde / Dhande",
+    "Mahesh Gupta",
+    "Mayur Rathod",
+    "Nishikant Karekar",
+    "Ranjita Hukare / Deshmukh",
+    "Rupali Sajjanwar",
+    "Shailja Mandhata"
+  ];
+
+  // ── Lead Source list (Confirmed-booking field, only one can be selected) ──
+  // Add, remove, or rename options here any time.
+  const LEAD_SOURCES = [
+    "99acres",
+    "Company Website and/or Online/Offline Exploration",
+    "CP",
+    "CTWA",
+    "Customer Referral",
+    "Employee Referral",
+    "Expo",
+    "FB Avenue",
+    "FB Glory",
+    "FB Legacy",
+    "FB Signature",
+    "FB Vista",
+    "Hoardings",
+    "Housing.com",
+    "Individual/Direct",
+    "LinkedIn Ads",
+    "MagicBricks",
+    "Management Reference",
+    "Radio",
+    "Walk In",
+    "Web Research & Download"
+  ];
 
   let isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'));
   let db = null, auth = null;
@@ -336,6 +412,8 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     renderGridSkeleton();
+    renderSalesPersonOptions();
+    renderLeadSourceOptions();
     if (!isConfigured) {
       document.getElementById('setupBanner').classList.add('show');
       setSyncState(false, 'Not configured');
@@ -683,7 +761,8 @@
         <div style="margin-bottom:6px;"><b>Flat ${no} — Booked (Confirmed)</b></div>
         <div class="row"><span class="k">Date</span><span>${data.bookingDate || '—'}</span></div>
         <div class="row"><span class="k">Customer</span><span>${esc(data.customerName) || '—'}</span></div>
-        <div class="row"><span class="k">Sales Person</span><span>${esc(data.salesPerson) || '—'}</span></div>
+        <div class="row"><span class="k">Sales Person</span><span>${esc(salesPersonDisplay(data)) || '—'}</span></div>
+        <div class="row"><span class="k">Lead Source</span><span>${esc(data.leadSource) || '—'}</span></div>
         <div class="row"><span class="k">CP Name</span><span>${esc(data.cpName) || '—'}</span></div>
       `;
     } else if (st === 'provisional') {
@@ -770,6 +849,63 @@
     renderGrid();
   }
 
+  // ── Sales Person multi-select (checkbox dropdown) ──
+  function renderSalesPersonOptions() {
+    const panel = document.getElementById('msSalesPersonPanel');
+    panel.innerHTML = SALES_PERSONS.map(name => `
+      <label class="multiselect-item">
+        <input type="checkbox" value="${esc(name)}" onchange="updateSalesPersonText()">
+        <span>${esc(name)}</span>
+      </label>
+    `).join('');
+  }
+  function toggleSalesPersonPanel(e) {
+    e.stopPropagation();
+    document.getElementById('msSalesPerson').classList.toggle('open');
+  }
+  function updateSalesPersonText() {
+    const checked = getSelectedSalesPersons();
+    const textEl = document.getElementById('msSalesPersonText');
+    textEl.innerHTML = checked.length
+      ? esc(checked.join(', '))
+      : '<span class="ms-placeholder">Select sales person(s)</span>';
+  }
+  function getSelectedSalesPersons() {
+    return Array.from(document.querySelectorAll('#msSalesPersonPanel input:checked')).map(c => c.value);
+  }
+  function setSelectedSalesPersons(value) {
+    // value may be an array (current format) or a single string (legacy data saved before
+    // this field supported multiple selections) — both are handled the same way here.
+    const arr = Array.isArray(value) ? value : (value ? [value] : []);
+    document.querySelectorAll('#msSalesPersonPanel input').forEach(c => {
+      c.checked = arr.includes(c.value);
+    });
+    updateSalesPersonText();
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#msSalesPerson')) {
+      document.getElementById('msSalesPerson').classList.remove('open');
+    }
+  });
+
+  // ── Lead Source dropdown ──
+  function renderLeadSourceOptions() {
+    const sel = document.getElementById('fLeadSource');
+    LEAD_SOURCES.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      sel.appendChild(o);
+    });
+  }
+
+  // Renders the Sales Person value for display, whether it's stored as an array
+  // (current format) or a plain string (legacy data from before multi-select).
+  function salesPersonDisplay(data) {
+    const v = data && data.salesPerson;
+    if (Array.isArray(v)) return v.join(', ');
+    return v || '';
+  }
+
   // ── Edit modal ──
   function openEditModal(no) {
     editingFlat = no;
@@ -779,7 +915,8 @@
     setStatusRadio(data.status || 'available');
     document.getElementById('fBookingDate').value = data.bookingDate || '';
     document.getElementById('fCustomerName').value = data.customerName || '';
-    document.getElementById('fSalesPerson').value = data.salesPerson || '';
+    setSelectedSalesPersons(data.salesPerson);
+    document.getElementById('fLeadSource').value = data.leadSource || '';
     document.getElementById('fCpName').value = data.cpName || '';
     document.getElementById('editOverlay').classList.add('show');
   }
@@ -818,15 +955,17 @@
     if (status === 'confirmed') {
       const bookingDate = document.getElementById('fBookingDate').value.trim();
       const customerName = document.getElementById('fCustomerName').value.trim();
-      const salesPerson = document.getElementById('fSalesPerson').value.trim();
+      const salesPerson = getSelectedSalesPersons();
+      const leadSource = document.getElementById('fLeadSource').value.trim();
       const cpName = document.getElementById('fCpName').value.trim();
-      if (!bookingDate || !customerName || !salesPerson) {
+      if (!bookingDate || !customerName || salesPerson.length === 0) {
         errEl.textContent = 'Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
         alert('Date of Booking, Customer Name and Sales Person are required to mark a flat as Confirmed.');
         return;
       }
       payload = { status, bookingDate, customerName, salesPerson };
+      if (leadSource) payload.leadSource = leadSource;
       if (cpName) payload.cpName = cpName;
     } else if (status === 'provisional') {
       const customerName = document.getElementById('fCustomerName').value.trim();
