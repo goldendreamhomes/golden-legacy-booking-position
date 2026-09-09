@@ -90,8 +90,8 @@
   }
   .flat-chip:hover { transform: scale(1.04); }
   .flat-chip.available { background: #f0fff4; color: #276749; border-color: #c6f6d5; }
-  .flat-chip.confirmed { background: #1a3c5e; color: white; }
-  .flat-chip.provisional { background: #bee3f8; color: #1a3c5e; }
+  .flat-chip.confirmed  { background: #f0f4f8; color: #4a5568; border-color: #718096; }
+  .flat-chip.provisional { background: #f7fafc; color: #a0aec0; border-color: #e2e8f0; }
   .flat-chip.editable { cursor: pointer; }
 
   /* ── Legend ── */
@@ -99,8 +99,8 @@
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 13px; height: 13px; border-radius: 4px; display: inline-block; }
   .sw-avail { background: #f0fff4; border: 1.5px solid #c6f6d5; }
-  .sw-conf { background: #1a3c5e; }
-  .sw-prov { background: #bee3f8; }
+  .sw-conf { background: #f0f4f8; border: 1.5px solid #718096; }
+  .sw-prov { background: #f7fafc; border: 1.5px solid #e2e8f0; }
   .hint { font-size: 0.72rem; color: #a0aec0; padding: 0 20px 14px; }
 
   /* ── Tooltip ── */
@@ -333,7 +333,7 @@
 
   // Shared password sales staff enter to unlock Editor Mode.
   // This is a soft deterrent only (page is public) — change it any time by editing this line.
-  const EDITOR_PASSWORD = "GL_GML_2026";
+  const EDITOR_PASSWORD = "GoldenB2026";
 
   const BOARD_PATH = { collection: 'booking_boards', doc: 'wingB' };
 
@@ -341,11 +341,11 @@
   // Add, remove, or rename names here any time — this is the single source of truth
   // for the dropdown options. Kept in alphabetical order.
   const SALES_PERSONS = [
+    "Amardip Gatade",
     "Karishma Borde / Dhande",
     "Mahesh Gupta",
     "Mayur Rathod",
     "Nishikant Karekar",
-    "Pragati Mandhata",
     "Ranjita Hukare / Deshmukh",
     "Rupali Sajjanwar",
     "Shailja Mandhata"
@@ -520,10 +520,10 @@
   // Export view (forExport=true): provisional is visually folded into "Booked"
   // (the shared PNG/WhatsApp image never distinguishes the two), so "Available"
   // there = Total − Confirmed − Provisional to stay consistent with what's shown.
-  function updateSummary(forExport = false) {
+  function updateSummary() {
     const { total, confirmed, provisional } = computeCounts();
-    const booked = forExport ? (confirmed + provisional) : confirmed;            // plain sum, never "x + y"
-    const available = forExport ? (total - confirmed - provisional) : (total - confirmed); // plain difference, never "x - y"
+    const booked = confirmed + provisional;
+    const available = total - confirmed - provisional;
     document.getElementById('sumTotal').textContent = total;
     document.getElementById('sumBooked').textContent = booked;
     document.getElementById('sumAvail').textContent = available;
