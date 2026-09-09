@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <!-- PNG export is drawn natively via Canvas 2D (buildExportCanvas) — no DOM-cloning library needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -66,6 +67,8 @@
   .btn-share:hover { background: #1ebc59; }
   .btn-png { background: white; color: #1a3c5e; border: 1.5px solid #cbd5e0; }
   .btn-png:hover { border-color: #1a3c5e; }
+  .btn-export { background: #1a3c5e; color: white; margin-left: auto; }
+  .btn-export:hover { background: #122c47; }
 
   /* ── Capture area (this is what gets PNG'd / shared) ── */
   #captureArea { background: transparent; }
@@ -90,8 +93,8 @@
   }
   .flat-chip:hover { transform: scale(1.04); }
   .flat-chip.available { background: #f0fff4; color: #276749; border-color: #c6f6d5; }
-  .flat-chip.confirmed  { background: #f0f4f8; color: #4a5568; border-color: #718096; }
-  .flat-chip.provisional { background: #f7fafc; color: #4a5568; border-color: #e2e8f0; }
+  .flat-chip.confirmed  { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .flat-chip.provisional { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
   .flat-chip.editable { cursor: pointer; }
 
   /* ── Legend ── */
@@ -99,8 +102,8 @@
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 13px; height: 13px; border-radius: 4px; display: inline-block; }
   .sw-avail { background: #f0fff4; border: 1.5px solid #c6f6d5; }
-  .sw-conf { background: #f0f4f8; border: 1.5px solid #718096; }
-  .sw-prov { background: #f7fafc; border: 1.5px solid #e2e8f0; }
+  .sw-conf { background: #dbeafe; border: 1.5px solid #93c5fd; }
+  .sw-prov { background: #eff6ff; border: 1.5px solid #bfdbfe; }
   .hint { font-size: 0.72rem; color: #a0aec0; padding: 0 20px 14px; }
 
   /* ── Tooltip ── */
@@ -239,6 +242,7 @@
   <div class="actionbar">
     <button class="btn btn-png" onclick="downloadPNG()">⬇ Download PNG</button>
     <button class="btn btn-share" onclick="shareWhatsApp()">📤 Share via WhatsApp</button>
+    <button class="btn btn-export" onclick="exportBookings()">📊 Export</button>
   </div>
 
   <div style="font-size:0.7rem;color:#a0aec0;text-align:center;margin-top:10px;">
@@ -1007,6 +1011,44 @@
       alert('Save FAILED: ' + e.message + '\n\nCode: ' + (e.code || 'unknown'));
       console.error('Save failed', e);
     });
+  }
+
+  // ── Export confirmed bookings to XLSX ──
+  function exportBookings() {
+    const pwd = prompt('Enter export password:');
+    if (pwd === null) return;
+    if (pwd !== EDITOR_PASSWORD) { alert('Incorrect password — export cancelled.'); return; }
+
+    const rows = [];
+    ALL_FLATS.forEach(flat => {
+      const d = currentData.flats && currentData.flats[flat.no];
+      if (d && d.status === 'confirmed') {
+        rows.push([
+          flat.no,
+          d.bookingDate || '',
+          d.customerName || '',
+          salesPersonDisplay(d),
+          d.leadSource || '',
+          d.cpName || ''
+        ]);
+      }
+    });
+
+    // ALL_FLATS is built floor 1→16, unit 1→8, so numeric sort gives ascending flat order
+    rows.sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10));
+
+    if (!rows.length) { alert('No confirmed bookings to export.'); return; }
+
+    const wsData = [
+      ['Flat No.', 'Date of Booking', 'Customer Name', 'Sales Person', 'Lead Source', 'CP Name'],
+      ...rows
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    // Auto-width columns
+    ws['!cols'] = [10, 16, 28, 32, 36, 24].map(wch => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Confirmed Bookings');
+    XLSX.writeFile(wb, `GoldenLegacy_WingB_ConfirmedBookings_${new Date().toISOString().slice(0,10)}.xlsx`);
   }
 
   // ── PNG download / WhatsApp share ──
