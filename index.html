@@ -304,9 +304,13 @@
         </div>
         <div class="field">
           <label>Lead Source <span class="req">*</span></label>
-          <select id="fLeadSource">
-            <option value="">— Select —</option>
-          </select>
+          <div class="multiselect" id="msLeadSource">
+            <div class="multiselect-display" id="msLeadSourceDisplay" onclick="toggleLeadSourcePanel(event)">
+              <span class="ms-text" id="msLeadSourceText"><span class="ms-placeholder">Select lead source(s)</span></span>
+              <span class="ms-arrow">&#9662;</span>
+            </div>
+            <div class="multiselect-panel" id="msLeadSourcePanel"></div>
+          </div>
         </div>
         <div class="field">
           <label>CP Name (optional)</label>
@@ -355,7 +359,7 @@
     "Shailja Mandhata"
   ];
 
-  // ── Lead Source list (Confirmed-booking field, only one can be selected) ──
+  // ── Lead Source list (Confirmed-booking field, multiple can be selected) ──
   // Add, remove, or rename options here any time.
   const LEAD_SOURCES = [
     "99acres",
@@ -766,7 +770,7 @@
         <div class="row"><span class="k">Date</span><span>${data.bookingDate || '—'}</span></div>
         <div class="row"><span class="k">Customer</span><span>${esc(data.customerName) || '—'}</span></div>
         <div class="row"><span class="k">Sales Person</span><span>${esc(salesPersonDisplay(data)) || '—'}</span></div>
-        <div class="row"><span class="k">Lead Source</span><span>${esc(data.leadSource) || '—'}</span></div>
+        <div class="row"><span class="k">Lead Source</span><span>${esc(leadSourceDisplay(data)) || '—'}</span></div>
         <div class="row"><span class="k">CP/Referrer/Broker</span><span>${esc(data.cpName) || '—'}</span></div>
       `;
     } else if (st === 'provisional') {
@@ -892,14 +896,52 @@
     }
   });
 
-  // ── Lead Source dropdown ──
+  // ── Lead Source multi-select (checkbox dropdown) ──
   function renderLeadSourceOptions() {
-    const sel = document.getElementById('fLeadSource');
-    LEAD_SOURCES.forEach(opt => {
-      const o = document.createElement('option');
-      o.value = opt; o.textContent = opt;
-      sel.appendChild(o);
+    const panel = document.getElementById('msLeadSourcePanel');
+    panel.innerHTML = LEAD_SOURCES.map(name => `
+      <label class="multiselect-item">
+        <input type="checkbox" value="${esc(name)}" onchange="updateLeadSourceText()">
+        <span>${esc(name)}</span>
+      </label>
+    `).join('');
+  }
+  function toggleLeadSourcePanel(e) {
+    e.stopPropagation();
+    document.getElementById('msSalesPerson').classList.remove('open');
+    document.getElementById('msLeadSource').classList.toggle('open');
+  }
+  function updateLeadSourceText() {
+    const checked = getSelectedLeadSources();
+    const textEl = document.getElementById('msLeadSourceText');
+    textEl.innerHTML = checked.length
+      ? esc(checked.join(', '))
+      : '<span class="ms-placeholder">Select lead source(s)</span>';
+  }
+  function getSelectedLeadSources() {
+    return Array.from(document.querySelectorAll('#msLeadSourcePanel input:checked')).map(c => c.value);
+  }
+  function setSelectedLeadSources(value) {
+    // value may be an array (current format) or a single string (legacy data saved before
+    // this field supported multiple selections) — both are handled the same way here.
+    const arr = Array.isArray(value) ? value : (value ? [value] : []);
+    document.querySelectorAll('#msLeadSourcePanel input').forEach(c => {
+      c.checked = arr.includes(c.value);
     });
+    updateLeadSourceText();
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#msLeadSource')) {
+      document.getElementById('msLeadSource').classList.remove('open');
+    }
+  });
+
+  // Renders the Lead Source value for display, whether it's stored as an array
+  // (current format) or a plain string (legacy data from before multi-select).
+  function leadSourceDisplay(data) {
+    const v = data && data.leadSource;
+    if (Array.isArray(v)) return v.join(', ');
+    return v || '';
   }
 
   // Renders the Sales Person value for display, whether it's stored as an array
@@ -920,7 +962,7 @@
     document.getElementById('fBookingDate').value = data.bookingDate || '';
     document.getElementById('fCustomerName').value = data.customerName || '';
     setSelectedSalesPersons(data.salesPerson);
-    document.getElementById('fLeadSource').value = data.leadSource || '';
+    setSelectedLeadSources(data.leadSource);
     document.getElementById('fCpName').value = data.cpName || '';
     document.getElementById('editOverlay').classList.add('show');
   }
@@ -960,9 +1002,9 @@
       const bookingDate = document.getElementById('fBookingDate').value.trim();
       const customerName = document.getElementById('fCustomerName').value.trim();
       const salesPerson = getSelectedSalesPersons();
-      const leadSource = document.getElementById('fLeadSource').value.trim();
+      const leadSource = getSelectedLeadSources();
       const cpName = document.getElementById('fCpName').value.trim();
-      if (!bookingDate || !customerName || salesPerson.length === 0 || !leadSource) {
+      if (!bookingDate || !customerName || salesPerson.length === 0 || leadSource.length === 0) {
         errEl.textContent = 'Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
         alert('Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.');
@@ -1028,7 +1070,7 @@
           d.bookingDate || '',
           d.customerName || '',
           salesPersonDisplay(d),
-          d.leadSource || '',
+          leadSourceDisplay(d),
           d.cpName || ''
         ]);
       }
