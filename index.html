@@ -312,6 +312,10 @@
           <label>CP Name (optional)</label>
           <input type="text" id="fCpName" placeholder="Channel Partner name (or 'Direct')">
         </div>
+        <div class="field">
+          <label>Multiple Sales Person Names (optional)</label>
+          <input type="text" id="fMultiNames" placeholder="Names, if 'Multiple' is selected above">
+        </div>
       </div>
     </div>
     <div class="modal-err" id="editErr"></div>
@@ -352,7 +356,8 @@
     "Pragati Mandhata",
     "Ranjita Hukare / Deshmukh",
     "Rupali Sajjanwar",
-    "Shailja Mandhata"
+    "Shailja Mandhata",
+    "Multiple"
   ];
 
   // ── Lead Source list (Confirmed-booking field, only one can be selected) ──
@@ -922,6 +927,7 @@
     setSelectedSalesPersons(data.salesPerson);
     document.getElementById('fLeadSource').value = data.leadSource || '';
     document.getElementById('fCpName').value = data.cpName || '';
+    document.getElementById('fMultiNames').value = data.multipleNames || '';
     document.getElementById('editOverlay').classList.add('show');
   }
   function closeEditModal() {
@@ -962,6 +968,7 @@
       const salesPerson = getSelectedSalesPersons();
       const leadSource = document.getElementById('fLeadSource').value.trim();
       const cpName = document.getElementById('fCpName').value.trim();
+      const multipleNames = document.getElementById('fMultiNames').value.trim();
       if (!bookingDate || !customerName || salesPerson.length === 0 || !leadSource) {
         errEl.textContent = 'Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
@@ -970,6 +977,7 @@
       }
       payload = { status, bookingDate, customerName, salesPerson, leadSource };
       if (cpName) payload.cpName = cpName;
+      if (multipleNames) payload.multipleNames = multipleNames;
     } else if (status === 'provisional') {
       const customerName = document.getElementById('fCustomerName').value.trim();
       if (customerName) payload.customerName = customerName;
