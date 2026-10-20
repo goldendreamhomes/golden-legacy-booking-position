@@ -773,6 +773,7 @@
         <div class="row"><span class="k">Sales Person</span><span>${esc(salesPersonDisplay(data)) || '—'}</span></div>
         <div class="row"><span class="k">Lead Source</span><span>${esc(data.leadSource) || '—'}</span></div>
         <div class="row"><span class="k">CP/Referrer/Broker</span><span>${esc(data.cpName) || '—'}</span></div>
+        ${data.multipleNames ? `<div class="row"><span class="k">Multiple Names</span><span>${esc(data.multipleNames)}</span></div>` : ''}
       `;
     } else if (st === 'provisional') {
       body = `<div><b>Flat ${no} — Booked (Provisional)</b></div><div style="margin-top:4px;color:#cbd5e0;">Tentative hold, not yet confirmed.</div>`;
@@ -1037,7 +1038,8 @@
           d.customerName || '',
           salesPersonDisplay(d),
           d.leadSource || '',
-          d.cpName || ''
+          d.cpName || '',
+          d.multipleNames || ''
         ]);
       }
     });
@@ -1048,12 +1050,12 @@
     if (!rows.length) { alert('No confirmed bookings to export.'); return; }
 
     const wsData = [
-      ['Flat No.', 'Date of Booking', 'Customer Name', 'Sales Person', 'Lead Source', 'CP Name'],
+      ['Flat No.', 'Date of Booking', 'Customer Name', 'Sales Person', 'Lead Source', 'CP Name', 'Multiple Sales Person Names'],
       ...rows
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     // Auto-width columns
-    ws['!cols'] = [10, 16, 28, 32, 36, 24].map(wch => ({ wch }));
+    ws['!cols'] = [10, 16, 28, 32, 36, 24, 36].map(wch => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Confirmed Bookings');
     XLSX.writeFile(wb, `GoldenLegacy_WingB_ConfirmedBookings_${new Date().toISOString().slice(0,10)}.xlsx`);
