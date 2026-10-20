@@ -345,11 +345,11 @@
   // Add, remove, or rename names here any time — this is the single source of truth
   // for the dropdown options. Kept in alphabetical order.
   const SALES_PERSONS = [
-    "Amardip Gatade",
     "Karishma Borde / Dhande",
     "Mahesh Gupta",
     "Mayur Rathod",
     "Nishikant Karekar",
+    "Pragati Mandhata",
     "Ranjita Hukare / Deshmukh",
     "Rupali Sajjanwar",
     "Shailja Mandhata"
@@ -767,7 +767,7 @@
         <div class="row"><span class="k">Customer</span><span>${esc(data.customerName) || '—'}</span></div>
         <div class="row"><span class="k">Sales Person</span><span>${esc(salesPersonDisplay(data)) || '—'}</span></div>
         <div class="row"><span class="k">Lead Source</span><span>${esc(data.leadSource) || '—'}</span></div>
-        <div class="row"><span class="k">CP Name</span><span>${esc(data.cpName) || '—'}</span></div>
+        <div class="row"><span class="k">CP/Referrer/Broker</span><span>${esc(data.cpName) || '—'}</span></div>
       `;
     } else if (st === 'provisional') {
       body = `<div><b>Flat ${no} — Booked (Provisional)</b></div><div style="margin-top:4px;color:#cbd5e0;">Tentative hold, not yet confirmed.</div>`;
