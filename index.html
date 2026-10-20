@@ -312,10 +312,6 @@
           <label>CP Name (optional)</label>
           <input type="text" id="fCpName" placeholder="Channel Partner name (or 'Direct')">
         </div>
-        <div class="field">
-          <label>Multiple Sales Person Names (optional)</label>
-          <input type="text" id="fMultiNames" placeholder="Names, if 'Multiple' is selected above">
-        </div>
       </div>
     </div>
     <div class="modal-err" id="editErr"></div>
@@ -356,8 +352,7 @@
     "Pragati Mandhata",
     "Ranjita Hukare / Deshmukh",
     "Rupali Sajjanwar",
-    "Shailja Mandhata",
-    "Multiple"
+    "Shailja Mandhata"
   ];
 
   // ── Lead Source list (Confirmed-booking field, only one can be selected) ──
@@ -773,7 +768,6 @@
         <div class="row"><span class="k">Sales Person</span><span>${esc(salesPersonDisplay(data)) || '—'}</span></div>
         <div class="row"><span class="k">Lead Source</span><span>${esc(data.leadSource) || '—'}</span></div>
         <div class="row"><span class="k">CP/Referrer/Broker</span><span>${esc(data.cpName) || '—'}</span></div>
-        ${data.multipleNames ? `<div class="row"><span class="k">Multiple Names</span><span>${esc(data.multipleNames)}</span></div>` : ''}
       `;
     } else if (st === 'provisional') {
       body = `<div><b>Flat ${no} — Booked (Provisional)</b></div><div style="margin-top:4px;color:#cbd5e0;">Tentative hold, not yet confirmed.</div>`;
@@ -928,7 +922,6 @@
     setSelectedSalesPersons(data.salesPerson);
     document.getElementById('fLeadSource').value = data.leadSource || '';
     document.getElementById('fCpName').value = data.cpName || '';
-    document.getElementById('fMultiNames').value = data.multipleNames || '';
     document.getElementById('editOverlay').classList.add('show');
   }
   function closeEditModal() {
@@ -969,7 +962,6 @@
       const salesPerson = getSelectedSalesPersons();
       const leadSource = document.getElementById('fLeadSource').value.trim();
       const cpName = document.getElementById('fCpName').value.trim();
-      const multipleNames = document.getElementById('fMultiNames').value.trim();
       if (!bookingDate || !customerName || salesPerson.length === 0 || !leadSource) {
         errEl.textContent = 'Date of Booking, Customer Name, Sales Person and Lead Source are required to mark a flat as Confirmed.';
         errEl.style.display = 'block';
@@ -978,7 +970,6 @@
       }
       payload = { status, bookingDate, customerName, salesPerson, leadSource };
       if (cpName) payload.cpName = cpName;
-      if (multipleNames) payload.multipleNames = multipleNames;
     } else if (status === 'provisional') {
       const customerName = document.getElementById('fCustomerName').value.trim();
       if (customerName) payload.customerName = customerName;
@@ -1038,8 +1029,7 @@
           d.customerName || '',
           salesPersonDisplay(d),
           d.leadSource || '',
-          d.cpName || '',
-          d.multipleNames || ''
+          d.cpName || ''
         ]);
       }
     });
@@ -1050,12 +1040,12 @@
     if (!rows.length) { alert('No confirmed bookings to export.'); return; }
 
     const wsData = [
-      ['Flat No.', 'Date of Booking', 'Customer Name', 'Sales Person', 'Lead Source', 'CP Name', 'Multiple Sales Person Names'],
+      ['Flat No.', 'Date of Booking', 'Customer Name', 'Sales Person', 'Lead Source', 'CP Name'],
       ...rows
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     // Auto-width columns
-    ws['!cols'] = [10, 16, 28, 32, 36, 24, 36].map(wch => ({ wch }));
+    ws['!cols'] = [10, 16, 28, 32, 36, 24].map(wch => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Confirmed Bookings');
     XLSX.writeFile(wb, `GoldenLegacy_WingB_ConfirmedBookings_${new Date().toISOString().slice(0,10)}.xlsx`);
